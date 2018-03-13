@@ -10,6 +10,8 @@ test in assembly := {}
 
 assemblyJarName in assembly := "bankier.jar"
 
+parallelExecution in Test := false
+
 enablePlugins(DockerPlugin)
 
 dockerfile in docker := {
