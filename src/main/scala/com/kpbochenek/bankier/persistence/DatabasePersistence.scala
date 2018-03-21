@@ -9,7 +9,9 @@ import scala.concurrent.{Await, Future}
 
 class DatabasePersistence(db: Database) extends AccountPersistence with TransactionPersistence {
   import com.kpbochenek.bankier.persistence.AccountTable.accounts
-  import com.kpbochenek.bankier.persistence.TransactionTable.transactions
+  import TransactionTable.{transactions, _}
+
+  val BOTTOM_ACCOUNT_LIMIT = 0
 
   Await.result(db.run(DBIO.seq(accounts.schema.create, transactions.schema.create)), 5.seconds)
 
@@ -36,20 +38,33 @@ class DatabasePersistence(db: Database) extends AccountPersistence with Transact
     db.run(transactions.filter(_.transactionId === transactionId).exists.result)
   }
 
-  override def logTransaction(transactionId: String, fromAccountId: String, toAccountId: String, amount: Int): Future[Unit] = {
-    db.run(transactions += Transaction(transactionId, fromAccountId, toAccountId, amount))
-      .map(_ => Unit)
+  override def updateAccountBalance(transactionId: String, accountId: String, amount: Int): Future[Boolean] = {
+    val tr = if (amount < 0) {
+      Transaction(transactionId, accountId, VOID_ACCOUNT, amount)
+    } else {
+      Transaction(transactionId, VOID_ACCOUNT, accountId, amount)
+    }
+
+    val updateTransaction = (for {
+      balance <- accounts.filter(_.id === accountId).map(_.balance).result.head
+      if balance + amount >= BOTTOM_ACCOUNT_LIMIT
+      _ <- transactions += tr
+      _ <- accounts.filter(_.id === accountId).map(_.balance).update(balance + amount)
+    } yield true).transactionally
+    db.run(updateTransaction)
+      .recoverWith { case _: NoSuchElementException => Future.successful(false)}
   }
 
-  override def updateAccountBalance(transactionId: String, accountId: String, amount: Int): Future[Unit] = {
-    db.run(accounts.filter(_.id === accountId).map(_.balance).update(amount))
-      .map(_ => Unit)
-  }
-
-  override def makeTransaction(transactionId: String, fromAccountId: String, toAccountId: String, amount: Int): Future[Unit] = {
-    db.run(DBIO.seq(
-      sqlu"update account SET balance = balance - $amount WHERE id=$fromAccountId",
-      sqlu"update account SET balance = balance + $amount WHERE id=$toAccountId"
-    ))
+  override def makeTransaction(transactionId: String, fromAccountId: String, toAccountId: String, amount: Int): Future[Boolean] = {
+    val transferTransaction = (for {
+      fromBalance <- accounts.filter(_.id === fromAccountId).map(_.balance).result.head
+      toBalance <- accounts.filter(_.id === toAccountId).map(_.balance).result.head
+      if fromBalance - amount >= BOTTOM_ACCOUNT_LIMIT
+      _ <- transactions += Transaction(transactionId, fromAccountId, toAccountId, amount)
+      _ <- accounts.filter(_.id === fromAccountId).map(_.balance).update(fromBalance - amount)
+      _ <- accounts.filter(_.id === toAccountId).map(_.balance).update(toBalance + amount)
+    } yield true).transactionally
+    db.run(transferTransaction)
+      .recoverWith { case _: NoSuchElementException => Future.successful(false)}
   }
 }

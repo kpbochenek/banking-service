@@ -73,14 +73,16 @@ class TransactionRouteTest extends WordSpec with Matchers with ScalatestRouteTes
 
   "TransferHandler withdraw" should {
     "withdraw money successfully" in {
+      executeDeposit("TX-0", accountIds.head, 100, StatusCodes.OK)
       executeWithdraw("TX-1", accountIds.head, 10, StatusCodes.OK)
-      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual -10
+      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual 90
     }
 
     "sum withdraw money" in {
+      executeDeposit("TX-0", accountIds.head, 100, StatusCodes.OK)
       executeWithdraw("TX-1", accountIds.head, 20, StatusCodes.OK)
       executeWithdraw("TX-2", accountIds.head, 18, StatusCodes.OK)
-      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual -38
+      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual 62
     }
 
     "ignore withdraw for unknown account" in {
@@ -88,9 +90,17 @@ class TransactionRouteTest extends WordSpec with Matchers with ScalatestRouteTes
     }
 
     "ignore withdraw money second time" in {
+      executeDeposit("TX-0", accountIds.head, 100, StatusCodes.OK)
       executeWithdraw("TX-1", accountIds.head, 15, StatusCodes.OK)
       executeWithdraw("TX-1", accountIds.head, 50, StatusCodes.BadRequest)
-      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual -15
+      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual 85
+    }
+
+    "fail withdrawing money with insufficient funds" in {
+      executeDeposit("TX-1", accountIds.head, 10, StatusCodes.OK)
+      executeWithdraw("TX-2", accountIds.head, 12, StatusCodes.BadRequest)
+      executeWithdraw("TX-3", accountIds.head, 10, StatusCodes.OK)
+      executeWithdraw("TX-4", accountIds.head, 1, StatusCodes.BadRequest)
     }
   }
 
@@ -103,10 +113,11 @@ class TransactionRouteTest extends WordSpec with Matchers with ScalatestRouteTes
     }
 
     "withdraw then deposit correctly" in {
+      executeDeposit("TX-0", accountIds.head, 100, StatusCodes.OK)
       executeWithdraw("TX-1", accountIds.head, 50, StatusCodes.OK)
       executeDeposit("TX-2", accountIds.head, 200, StatusCodes.OK)
 
-      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual 150
+      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual 250
     }
   }
 
@@ -152,6 +163,26 @@ class TransactionRouteTest extends WordSpec with Matchers with ScalatestRouteTes
 
       wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual 150
       wait(accountLogic.getAccountByLogin("AC-2")).get.balance shouldEqual 350
+    }
+
+    "fail transaction when account has insufficient funds" in {
+      executeDeposit("TX-1", accountIds(0), 100, StatusCodes.OK)
+      executeTransfer("TX-2", accountIds(0), accountIds(1), 200, StatusCodes.BadRequest)
+      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual 100
+      wait(accountLogic.getAccountByLogin("AC-2")).get.balance shouldEqual 0
+    }
+
+    "fail transaction when account has insufficient funds advanced" in {
+      executeDeposit("TX-1", accountIds(0), 100, StatusCodes.OK)
+      executeTransfer("TX-2", accountIds(0), accountIds(1), 50, StatusCodes.OK)
+      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual 50
+      wait(accountLogic.getAccountByLogin("AC-2")).get.balance shouldEqual 50
+
+      executeTransfer("TX-3", accountIds(0), accountIds(1), 60, StatusCodes.BadRequest)
+      executeTransfer("TX-4", accountIds(0), accountIds(1), 50, StatusCodes.OK)
+
+      wait(accountLogic.getAccountByLogin("AC-1")).get.balance shouldEqual 0
+      wait(accountLogic.getAccountByLogin("AC-2")).get.balance shouldEqual 100
 
     }
   }

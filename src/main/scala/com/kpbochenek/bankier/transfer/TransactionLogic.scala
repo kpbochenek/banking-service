@@ -1,7 +1,6 @@
 package com.kpbochenek.bankier.transfer
 
 import com.kpbochenek.bankier.account.AccountDomain.Account
-import com.kpbochenek.bankier.persistence.TransactionTable.VOID_ACCOUNT
 import com.kpbochenek.bankier.persistence.{AccountPersistence, TransactionPersistence}
 import com.typesafe.scalalogging.LazyLogging
 
@@ -43,15 +42,21 @@ class TransactionLogic(transactionPersistence: TransactionPersistence, accountPe
           if (isAlreadyProcessed) {
             Future.successful(transactionFailed(s"Transaction '$transactionId' already processed."))
           } else {
-            for {
-              _ <- transactionPersistence.updateAccountBalance(transactionId, account.id, account.balance + amount)
-              _ <- transactionPersistence.logTransaction(transactionId, VOID_ACCOUNT, account.id, amount)
-            } yield Right(TransactionSuccess())
+            makeDeposit(transactionId, account.id, amount)
           }
         })
-      case None =>
-        Future.successful(Left(TransactionError(s"Account not found $accountId")))
+      case None => Future.successful(transactionFailed(s"Account not found $accountId"))
     }
+  }
+
+  private def makeDeposit(transactionId: String, accountId: String, amount: Int): Future[TransactionResult] = {
+    transactionPersistence.updateAccountBalance(transactionId, accountId, amount).map(success => {
+        if (success) {
+          Right(TransactionSuccess())
+        } else {
+          transactionFailed("Insufficient funds")
+        }
+      })
   }
 
   def withdrawMoney(transactionId: String, accountId: String, amount: Int): Future[TransactionResult] =
@@ -59,10 +64,12 @@ class TransactionLogic(transactionPersistence: TransactionPersistence, accountPe
 
 
   private def transferMoney(transactionId: String, fromAccount: Account, toAccount: Account, amount: Int): Future[TransactionResult] = {
-    for {
-      _ <- transactionPersistence.makeTransaction(transactionId, fromAccount.id, toAccount.id, amount)
-      _ <- transactionPersistence.logTransaction(transactionId, fromAccount.id, toAccount.id, amount)
-    } yield Right(TransactionSuccess())
+    transactionPersistence.makeTransaction(transactionId, fromAccount.id, toAccount.id, amount).map(success => {
+      if (success) {
+        Right(TransactionSuccess())
+      } else {
+        transactionFailed("Insufficient funds")
+      }
+    })
   }
-
 }

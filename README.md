@@ -24,10 +24,7 @@ Execute command to run full suite of tests
 
 `sbt test`
 
-### Limitations
-- Account balance can be negative.
-- Not atomic operation of storing transaction and writing log for it.
-
 
 ### TODO
 - tests for database failures
+- expose endpoint to check performed transactions and add tests for it
