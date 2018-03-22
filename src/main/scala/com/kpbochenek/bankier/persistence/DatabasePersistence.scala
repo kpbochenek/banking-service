@@ -67,4 +67,8 @@ class DatabasePersistence(db: Database) extends AccountPersistence with Transact
     db.run(transferTransaction)
       .recoverWith { case _: NoSuchElementException => Future.successful(false)}
   }
+
+  def getHistory(accountId: String): Future[List[Transaction]] = {
+    db.run(transactions.filter(r => r.fromAccountId === accountId || r.toAccountId === accountId).result.map(_.toList))
+  }
 }

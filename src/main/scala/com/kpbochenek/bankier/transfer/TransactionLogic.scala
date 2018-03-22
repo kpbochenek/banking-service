@@ -62,6 +62,14 @@ class TransactionLogic(transactionPersistence: TransactionPersistence, accountPe
   def withdrawMoney(transactionId: String, accountId: String, amount: Int): Future[TransactionResult] =
     depositMoney(transactionId, accountId, -amount)
 
+  def getHistory(accountId: String): Future[Option[List[Transaction]]] = {
+    logger.info(s"Fetching history of account $accountId")
+    val accountF = accountPersistence.getAccountById(accountId)
+    accountF.flatMap {
+      case Some(_) => transactionPersistence.getHistory(accountId).map(t => Some(t))
+      case None => Future.successful(None)
+    }
+  }
 
   private def transferMoney(transactionId: String, fromAccount: Account, toAccount: Account, amount: Int): Future[TransactionResult] = {
     transactionPersistence.makeTransaction(transactionId, fromAccount.id, toAccount.id, amount).map(success => {

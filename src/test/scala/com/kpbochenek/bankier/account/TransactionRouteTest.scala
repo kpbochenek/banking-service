@@ -3,7 +3,7 @@ package com.kpbochenek.bankier.account
 import akka.http.scaladsl.model.{StatusCode, StatusCodes}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.kpbochenek.bankier.persistence.DatabasePersistence
-import com.kpbochenek.bankier.transfer.TransactionDomain.{DepositRequest, TransactionRequest, WithdrawRequest}
+import com.kpbochenek.bankier.transfer.TransactionDomain._
 import com.kpbochenek.bankier.transfer.{TransactionLogic, TransactionRoute}
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 import slick.jdbc.H2Profile.api._
@@ -45,6 +45,9 @@ class TransactionRouteTest extends WordSpec with Matchers with ScalatestRouteTes
   val depositPath = "/transactions/deposit"
   val withdrawPath = "/transactions/withdraw"
   val transactionPath = "/transactions/transaction"
+  val historyPath = "/transactions/history"
+
+  def historyPathForAccount(accountId: String): String = historyPath + "/" + accountId
 
   val createAccountRequest = CreateAccountRequest("login", "password")
 
@@ -187,11 +190,38 @@ class TransactionRouteTest extends WordSpec with Matchers with ScalatestRouteTes
     }
   }
 
+  "TransactionHandler history" should {
+    "return not found for not existing account" in {
+      Get(historyPathForAccount("UNKNOWN")) ~> underTest.routes ~> check {
+        status shouldEqual StatusCodes.NotFound
+      }
+    }
+
+    "return empty list for account without transactions" in {
+      checkHistory(accountIds(0), List())
+    }
+
+    "return transactions for account" in {
+      executeDeposit("TX-1", accountIds(0), 100, StatusCodes.OK)
+      executeTransfer("TX-2", accountIds(0), accountIds(1), 50, StatusCodes.OK)
+      val transferTx = Transaction("TX-2", accountIds(0), accountIds(1), 50)
+      checkHistory(accountIds(0), List(Transaction("TX-1", "VOID", accountIds(0), 100), transferTx))
+      checkHistory(accountIds(1), List(transferTx))
+    }
+  }
+
   private def wait[T](f: Future[T]): T = Await.result(f, 1.second)
 
   private def executeDeposit(txId: String, accountId: String, amount: Int, expectedStatus: StatusCode): Unit = {
     Post(depositPath, DepositRequest(txId, accountId, amount)) ~> underTest.routes ~> check {
       status shouldEqual expectedStatus
+    }
+  }
+
+  private def checkHistory(accountId: String, result: List[Transaction]): Unit = {
+    Get(historyPathForAccount(accountId)) ~> underTest.routes ~> check {
+      status shouldEqual StatusCodes.OK
+      responseAs[AccountTransactions].transactions shouldEqual result
     }
   }
 

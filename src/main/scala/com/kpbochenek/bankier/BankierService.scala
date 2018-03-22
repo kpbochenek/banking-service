@@ -32,7 +32,7 @@ object BankierService extends LazyLogging with Directives {
 
     val route = accounts.routes ~ transferRoute.routes ~ SwaggerDocService.routes ~ SwaggerDocService.staticApiRoutes
 
-    Http().bindAndHandle(route, "localhost", 8080)
+    Http().bindAndHandle(route, "0.0.0.0", 8080)
 
     println(s"Server online at http://localhost:8080/\nPress Ctrl-C to stop...")
   }

@@ -15,8 +15,9 @@ class TransactionRoute(val transferLogic: TransactionLogic) extends Directives w
 
 
   def routes: Route =
-    (pathPrefix("transactions") & post) {
-      transaction ~ deposit ~ withdraw
+    pathPrefix("transactions") {
+      post { transaction ~ deposit ~ withdraw } ~
+      get { history }
     }
 
 
@@ -67,6 +68,23 @@ class TransactionRoute(val transferLogic: TransactionLogic) extends Directives w
     pathPrefix("withdraw") {
       entity(as[WithdrawRequest]) { req =>
         onSuccess(transferLogic.withdrawMoney(req.transactionId, req.accountId, req.amount))(handleTransferResult)
+      }
+    }
+
+  @Path("/history/{accountId}")
+  @ApiOperation(httpMethod = "GET", value = "Get account operations history", consumes = "application/json")
+  @ApiImplicitParams(Array(
+    new ApiImplicitParam(name = "accountId", value = "AccountId", required = true, dataType = "string", paramType = "path")
+  ))
+  @ApiResponses(Array(
+    new ApiResponse(code = 200, message = "Account details", response = classOf[AccountTransactions]),
+    new ApiResponse(code = 404, message = "Account not found")
+  ))
+  def history: Route =
+    pathPrefix("history" / Segment) { accountId =>
+      onSuccess(transferLogic.getHistory(accountId)) {
+        case Some(transactions) => complete(AccountTransactions(transactions))
+        case None => complete(HttpResponse(StatusCodes.NotFound))
       }
     }
 

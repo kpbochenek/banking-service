@@ -9,6 +9,8 @@ object TransactionDomain {
 
   case class WithdrawRequest(transactionId: String, accountId: String, amount: Int)
 
+  case class AccountTransactions(transactions: List[Transaction])
+
   case class TransactionSuccess()
   case class TransactionError(error: String)
 

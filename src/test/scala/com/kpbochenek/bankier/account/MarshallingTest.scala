@@ -5,6 +5,7 @@ import java.time.Instant
 import akka.http.scaladsl.marshalling.{Marshal, Marshaller}
 import akka.http.scaladsl.model.{ContentTypes, MessageEntity}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import com.kpbochenek.bankier.transfer.TransactionDomain.{AccountTransactions, Transaction}
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 
 import scala.concurrent.duration._
@@ -23,6 +24,9 @@ class MarshallingTest extends WordSpec with Matchers with ScalatestRouteTest wit
         s"""{"login":"Ala","id":"AF32-FF9E-91BB","balance":981,"createdAt":"${now.toString}"}""")
       verifyJsonSame(AccountResponse("Ala", "AF32-FF9E-91BB", 234, now),
         s"""{"login":"Ala","id":"AF32-FF9E-91BB","balance":234,"createdAt":"${now.toString}"}""")
+
+      verifyJsonSame(AccountTransactions(List(Transaction("TX-1", "FROM-ACC-1", "TO-ACC-1", 100))),
+        s"""{"transactions":[{"transactionId":"TX-1","fromAccountId":"FROM-ACC-1","toAccountId":"TO-ACC-1","amount":100}]}""")
     }
 
   }
